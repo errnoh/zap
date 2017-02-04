@@ -24,6 +24,7 @@ import (
 	"io"
 	"sync"
 
+	"go.uber.org/zap/internal/buffers"
 	"go.uber.org/zap/internal/multierror"
 )
 
@@ -32,6 +33,10 @@ import (
 type WriteSyncer interface {
 	io.Writer
 	Sync() error
+}
+
+type writerWrapper struct {
+	io.Writer
 }
 
 // AddSync converts an io.Writer to a WriteSyncer. It attempts to be
@@ -44,6 +49,10 @@ func AddSync(w io.Writer) WriteSyncer {
 	default:
 		return writerWrapper{w}
 	}
+}
+
+func (w writerWrapper) Sync() error {
+	return nil
 }
 
 type lockedWriteSyncer struct {
@@ -75,12 +84,47 @@ func (s *lockedWriteSyncer) Sync() error {
 	return err
 }
 
-type writerWrapper struct {
-	io.Writer
+type bufferedWriteSyncer struct {
+	cap int
+	buf []byte
+	ws  WriteSyncer
 }
 
-func (w writerWrapper) Sync() error {
-	return nil
+// Buffer wraps a WriteSyncer and buffers writes. It's not safe for concurrent
+// use.
+func Buffer(ws WriteSyncer, cap int) WriteSyncer {
+	return &bufferedWriteSyncer{
+		cap: cap,
+		buf: buffers.Get(),
+		ws:  ws,
+	}
+}
+
+func (b *bufferedWriteSyncer) Write(bs []byte) (int, error) {
+	// Attempt to buffer.
+	// FIXME: be strict about max buffer size
+	b.buf = append(b.buf, bs...)
+	if len(b.buf) < b.cap {
+		return len(bs), nil
+	}
+
+	// Buffer full, flush to underlying WriteSyncer.
+	var errs multierror.Error
+	n, err := b.ws.Write(b.buf)
+	errs = errs.Append(err)
+	if n < len(b.buf) && err != io.ErrShortWrite {
+		errs = errs.Append(io.ErrShortWrite)
+	}
+	b.buf = b.buf[:0]
+	return n, errs.AsError()
+}
+
+func (b *bufferedWriteSyncer) Sync() error {
+	var errs multierror.Error
+	_, err := b.Write(nil)
+	errs = errs.Append(err)
+	errs = errs.Append(b.ws.Sync())
+	return errs.AsError()
 }
 
 type multiWriteSyncer []WriteSyncer

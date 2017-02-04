@@ -22,7 +22,6 @@ package zapcore_test
 
 import (
 	"runtime"
-	"strings"
 	"testing"
 	"time"
 
@@ -48,7 +47,6 @@ func TestJSONEncoderConfiguration(t *testing.T) {
 		Caller:     EntryCaller{Defined: true, File: "foo.go", Line: 42},
 	}
 	base := testEncoderConfig()
-	// expected: `{"level":"info","ts":100,"name":"main","caller":"foo.go:42","msg":"hello","stacktrace":"fake-stack"}`,
 
 	tests := []struct {
 		desc     string
@@ -170,7 +168,7 @@ func TestJSONEncoderConfiguration(t *testing.T) {
 				NameKey:        "N",
 				CallerKey:      "C",
 				StacktraceKey:  "S",
-				EncodeTime:     func(t time.Time, enc ArrayEncoder) { enc.AppendString(t.String()) },
+				EncodeTime:     func(t time.Time, enc PrimitiveArrayEncoder) { enc.AppendString(t.String()) },
 				EncodeDuration: base.EncodeDuration,
 				EncodeLevel:    base.EncodeLevel,
 			},
@@ -193,7 +191,7 @@ func TestJSONEncoderConfiguration(t *testing.T) {
 				CallerKey:      "C",
 				StacktraceKey:  "S",
 				EncodeTime:     base.EncodeTime,
-				EncodeDuration: func(d time.Duration, enc ArrayEncoder) { enc.AppendString(d.String()) },
+				EncodeDuration: StringDurationEncoder,
 				EncodeLevel:    base.EncodeLevel,
 			},
 			extra: func(enc Encoder) {
@@ -216,7 +214,7 @@ func TestJSONEncoderConfiguration(t *testing.T) {
 				StacktraceKey:  "S",
 				EncodeTime:     base.EncodeTime,
 				EncodeDuration: base.EncodeDuration,
-				EncodeLevel:    func(l Level, enc ArrayEncoder) { enc.AppendString(strings.ToUpper(l.String())) },
+				EncodeLevel:    CapitalLevelEncoder,
 			},
 			expected: `{"L":"INFO","T":0,"N":"main","C":"foo.go:42","M":"hello","S":"fake-stack"}`,
 		},

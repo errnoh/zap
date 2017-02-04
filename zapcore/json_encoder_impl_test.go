@@ -321,8 +321,8 @@ func assertJSON(t *testing.T, expected string, enc *jsonEncoder) {
 
 func assertOutput(t testing.TB, desc string, expected string, f func(Encoder)) {
 	enc := &jsonEncoder{EncoderConfig: &EncoderConfig{
-		EncodeTime:     func(t time.Time, enc ArrayEncoder) { enc.AppendInt64(t.UnixNano() / int64(time.Millisecond)) },
-		EncodeDuration: func(d time.Duration, enc ArrayEncoder) { enc.AppendInt64(int64(d)) },
+		EncodeTime:     EpochMillisTimeEncoder,
+		EncodeDuration: NanosDurationEncoder,
 	}}
 	f(enc)
 	assert.Equal(t, expected, string(enc.bytes), "Unexpected encoder output after adding a %s.", desc)

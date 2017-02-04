@@ -34,6 +34,20 @@ func (f optionFunc) apply(log *Logger) {
 	f(log)
 }
 
+// Facility sets the logger's underlying facility.
+func Facility(fac zapcore.Facility) Option {
+	return optionFunc(func(log *Logger) {
+		log.fac = fac
+	})
+}
+
+// WrapFacility wraps the logger's underlying facility.
+func WrapFacility(f func(zapcore.Facility) zapcore.Facility) Option {
+	return optionFunc(func(log *Logger) {
+		log.fac = f(log.fac)
+	})
+}
+
 // Fields sets the initial fields for the logger.
 func Fields(fs ...zapcore.Field) Option {
 	return optionFunc(func(log *Logger) {
@@ -50,8 +64,8 @@ func ErrorOutput(w zapcore.WriteSyncer) Option {
 	})
 }
 
-// Development puts the logger in development mode, which alters the behavior
-// of the DPanic method.
+// Development puts the logger in development mode, which alters the
+// behavior of the DPanic method.
 func Development() Option {
 	return optionFunc(func(log *Logger) {
 		log.development = true

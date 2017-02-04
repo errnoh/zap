@@ -30,20 +30,6 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-func defaultEncoderConfig() zapcore.EncoderConfig {
-	return zapcore.EncoderConfig{
-		MessageKey:     "msg",
-		TimeKey:        "ts",
-		LevelKey:       "level",
-		NameKey:        "name",
-		CallerKey:      "caller",
-		StacktraceKey:  "stacktrace",
-		EncodeTime:     func(t time.Time, enc zapcore.ArrayEncoder) { enc.AppendInt64(t.UnixNano() / int64(time.Millisecond)) },
-		EncodeDuration: func(d time.Duration, enc zapcore.ArrayEncoder) { enc.AppendInt64(int64(d)) },
-		EncodeLevel:    func(l zapcore.Level, enc zapcore.ArrayEncoder) { enc.AppendString(l.String()) },
-	}
-}
-
 // A Logger provides fast, leveled, structured logging. All methods are safe for
 // concurrent use.
 //
@@ -61,16 +47,11 @@ type Logger struct {
 	callerSkip int
 }
 
-// New returns a new logger with sensible defaults: logging at InfoLevel,
-// development mode off, errors written to standard error, and logs JSON
-// encoded to standard output.
+// New constructs a new Logger from the provided facility and options. Passing
+// a nil Facility results in a no-op Logger.
 func New(fac zapcore.Facility, options ...Option) *Logger {
 	if fac == nil {
-		fac = zapcore.WriterFacility(
-			zapcore.NewJSONEncoder(defaultEncoderConfig()),
-			os.Stdout,
-			InfoLevel,
-		)
+		fac = zapcore.NopFacility()
 	}
 	log := &Logger{
 		fac:         fac,
@@ -83,11 +64,38 @@ func New(fac zapcore.Facility, options ...Option) *Logger {
 	return log
 }
 
+// NewProduction builds a sensible production Logger, then applies the supplied
+// options. It writes InfoLevel and above logs to standard out as JSON.
+//
+// See NewProductionConfig for a complete description of the default settings.
+func NewProduction(options ...Option) (*Logger, error) {
+	return NewProductionConfig().Build(options...)
+}
+
+// NewDevelopment builds a sensible development Logger, then applies the
+// supplied options. It writes DebugLevel and above logs to standard out in a
+// human-friendly format.
+//
+// See NewDevelopmentConfig for a complete description of the default settings.
+func NewDevelopment(options ...Option) (*Logger, error) {
+	return NewDevelopmentConfig().Build(options...)
+}
+
 // Sugar converts a Logger to a SugaredLogger.
 func (log *Logger) Sugar() *SugaredLogger {
 	core := log.clone()
 	core.callerSkip += 2
 	return &SugaredLogger{core}
+}
+
+// WithOptions clones the current Logger, applies the supplied Options, and
+// returns the result. It's safe for concurrent use.
+func (log *Logger) WithOptions(opts ...Option) *Logger {
+	c := log.clone()
+	for _, opt := range opts {
+		opt.apply(c)
+	}
+	return c
 }
 
 // Named adds a new path segment to the logger's name. Segments are joined by
